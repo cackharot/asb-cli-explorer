@@ -1,5 +1,6 @@
 import os
 import json
+from azure.servicebus import Message
 from azure.servicebus.aio import ServiceBusClient
 
 def getmsgprops(msg):
@@ -10,12 +11,24 @@ def getmsgprops(msg):
 
 def getusrprops(msg):
   up = dict()
+  if msg.user_properties is None:
+    return up
   for key, value in msg.user_properties.items():
-    up[key.decode("utf-8")] = value.decode("utf-8")
+    val = value
+    if isinstance(value, str):
+      val = value
+    elif isinstance(value, bytes):
+      val = value.decode('utf-8')
+    up[key.decode("utf-8")] = val
   return up
 
 def display_msg(msg, settings):
-  pl = json.loads(str(msg))
+  pl = dict()
+  try:
+    pl = json.loads(str(msg))
+  except Exception as e:
+    pl['raw_body'] = str(msg)
+
   if settings.show_user_props:
     pl['user_props'] = getusrprops(msg)
   if settings.show_broker_props:
@@ -37,3 +50,16 @@ async def main_loop(settings):
               display_msg(msg, settings)
               await msg.abandon()
 
+
+async def send_msg(settings, body, user_props):
+  client = ServiceBusClient.from_connection_string(conn_str=settings.conn_str)
+  async with client:
+    sender = client.get_topic_sender(topic_name=settings.topic)
+    async with sender:
+      msg = Message(body, subject=user_props.get('label', None))
+      if 'label' in user_props:
+        user_props.pop('label')
+      msg.user_properties = user_props
+      await sender.send(msg)
+      print(f"Successfully sent message to topic '{settings.topic}'")
+  pass
