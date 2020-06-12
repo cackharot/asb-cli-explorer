@@ -1,7 +1,7 @@
 import click
 import asyncio
 from types import SimpleNamespace
-from asb_tour.main import main_loop, send_msg
+from asb_tour.main import receive_loop, send_msg
 
 @click.group()
 def cli():
@@ -14,7 +14,6 @@ def cli():
 @click.option('--show-user-props', is_flag=True, default=False, help='Show user properties on message?')
 @click.option('--show-broker-props', is_flag=True, default=False, help='Show broker properties on message?')
 def receive(conn_str, topic, subscription, show_user_props, show_broker_props):
-    loop = asyncio.get_event_loop()
     opt = dict(
         conn_str=conn_str,
         topic=topic,
@@ -23,7 +22,8 @@ def receive(conn_str, topic, subscription, show_user_props, show_broker_props):
         show_broker_props=show_broker_props
     )
     settings = SimpleNamespace(**opt)
-    loop.run_until_complete(main_loop(settings))
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(receive_loop(settings))
     pass
 
 @cli.command('send', short_help='Send messages to a topic')

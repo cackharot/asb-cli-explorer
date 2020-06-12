@@ -1,4 +1,7 @@
 import os
+import functools
+import signal
+import asyncio
 import json
 from azure.servicebus import Message
 from azure.servicebus.aio import ServiceBusClient
@@ -35,7 +38,19 @@ def display_msg(msg, settings):
     pl['broker_props'] = getmsgprops(msg)
   print(json.dumps(pl), flush=True)
 
-async def main_loop(settings):
+def ask_exit(signame, loop, cancel_request):
+    cancel_request.set()
+
+def add_signals(loop, cancel_request):
+  for signame in {'SIGINT', 'SIGTERM'}:
+    loop.add_signal_handler(
+        getattr(signal, signame),
+        functools.partial(ask_exit, signame, loop , cancel_request))
+
+async def receive_loop(settings):
+    loop = asyncio.get_running_loop()
+    cancel_request_event = asyncio.Event()
+    add_signals(loop, cancel_request_event)
     servicebus_client = ServiceBusClient.from_connection_string(conn_str=settings.conn_str)
 
     async with servicebus_client:
@@ -45,10 +60,12 @@ async def main_loop(settings):
             prefetch=10
         )
         async with receiver:
-            received_msgs = await receiver.receive(max_batch_size=10, max_wait_time=5)
-            for msg in received_msgs:
-              display_msg(msg, settings)
-              await msg.abandon()
+            while not cancel_request_event.is_set():
+              received_msgs = await receiver.receive(max_batch_size=10, max_wait_time=2)
+              for msg in received_msgs:
+                display_msg(msg, settings)
+                await msg.abandon()
+              await asyncio.sleep(0.1)
 
 
 async def send_msg(settings, body, user_props):
