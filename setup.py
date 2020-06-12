@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages
 
+print(find_packages())
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -9,7 +10,7 @@ setup(
     description="Small cli tool send and peek messages from Azure service bus",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version='0.1.0',
+    version='0.1.3',
     packages=find_packages(),
     include_package_data=True,
     python_requires=">=3.7.4",
