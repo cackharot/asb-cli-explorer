@@ -2,6 +2,14 @@
 
 Explore Azure Service Bus on command line. You can send, receive, peek message from topic/subscriptions.
 
+## Installation
+
+Requires python >= `3.7.4`
+
+```bash
+pip install asb-cli-explorer
+```
+
 ## Quick start
 
 Send a messge.
