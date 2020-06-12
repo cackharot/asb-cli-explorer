@@ -47,7 +47,7 @@ def add_signals(loop, cancel_request):
         getattr(signal, signame),
         functools.partial(ask_exit, signame, loop , cancel_request))
 
-async def receive_loop(settings):
+async def peek_loop(settings):
     loop = asyncio.get_running_loop()
     cancel_request_event = asyncio.Event()
     add_signals(loop, cancel_request_event)
@@ -60,12 +60,13 @@ async def receive_loop(settings):
             prefetch=10
         )
         async with receiver:
+            sno = 0
             while not cancel_request_event.is_set():
-              received_msgs = await receiver.receive(max_batch_size=10, max_wait_time=2)
+              received_msgs = await receiver.peek(message_count=10, sequence_number=sno)
               for msg in received_msgs:
                 display_msg(msg, settings)
-                await msg.abandon()
-              await asyncio.sleep(0.1)
+                sno = msg.sequence_number + 1
+              await asyncio.sleep(0.15)
 
 
 async def send_msg(settings, body, user_props):
