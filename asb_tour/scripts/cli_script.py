@@ -2,6 +2,7 @@ import click
 import asyncio
 from types import SimpleNamespace
 from asb_tour.main import peek_loop, send_msg
+from asb_tour.explorer import tui_app
 
 @click.group()
 def cli():
@@ -42,4 +43,10 @@ def send(conn_str, topic, props, msg):
     settings = SimpleNamespace(**dict(conn_str=conn_str,topic=topic))
     loop = asyncio.get_event_loop()
     loop.run_until_complete(send_msg(settings, msg, user_props))
+    pass
+
+@cli.command('explore')
+@click.option('--conn-str', required=True, envvar='SB_CONN_STR', help='Connection string to the Azure Service bus broker. Must be a management key!')
+def explore(conn_str):
+    tui_app(conn_str)
     pass
