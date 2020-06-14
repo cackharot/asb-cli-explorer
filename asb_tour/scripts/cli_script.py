@@ -32,13 +32,16 @@ def peek(conn_str, topic, subscription, show_user_props, show_broker_props):
 @cli.command('send', short_help='Send messages to a topic')
 @click.option('--conn-str', required=True, envvar='SB_CONN_STR', help='Connection string to the Azure Service bus broker')
 @click.option('--topic', required=True, help='Topic name')
-@click.argument('props', default=None, metavar='<props>')
-@click.argument('msg', required=True, metavar='<msg>')
-def send(conn_str, topic, props, msg):
+@click.option('--props', default=None, help='User properties as keyvalue pairs')
+@click.option('--data-file', default=None, type=click.File('r'), help='File path , message payload')
+@click.argument('msg', required=False, metavar='<msg>')
+def send(conn_str, topic, props, data_file, msg):
     """
     Send the given message with user properties to the {topic}
     <props> Message user properties e.g, key1=val1,key2=val2'
     """
+    if data_file:
+        msg = data_file.read()
     user_props = dict()
     if props is not None:
         user_props = dict([kv.split('=') for kv in props.split(',') if '=' in kv])

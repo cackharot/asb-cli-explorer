@@ -33,7 +33,7 @@ class MessageList(npyscreen.GridColTitles):
 
     def when_view(self, *args, **keywords):
         row = self.selected_row()
-        msg = self.parent.get_message(row[0])
+        msg = self.parent.selected_message(row[0])
         if msg is None:
             return
         self.parent.parentApp.getForm(MSG_PAYLOAD_VIEW_FRM).value = msg

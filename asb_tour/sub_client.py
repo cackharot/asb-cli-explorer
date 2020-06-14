@@ -35,7 +35,7 @@ class SubscriptionClient(object):
 
     def find_message(self, seqno):
         l = [x for x in self._messages if x.sequence_number == seqno]
-        if len(x) == 1:
+        if len(l) == 1:
             return l[0]
         return None
 
