@@ -43,8 +43,9 @@ class MessageList(npyscreen.GridColTitles):
     default_column_number = 3
     def __init__(self, *args, **keywords):
         super(MessageList, self).__init__(*args, **keywords)
-        self.columns = 3
         self.col_margin = 0
+        self.row_height = 1
+        #self.column_width_requested = 25
         self.select_whole_line = True
         self.on_select_callback = self.selected
         self.col_titles = ['SeqNo', "Body", "Enqueued Time"]
@@ -59,10 +60,7 @@ class MessageList(npyscreen.GridColTitles):
 
     def selected(self):
         row = self.selected_row()
-        msg = self.parent.get_message(row[0])
-        if msg is None:
-            return
-        # TODO: Show message details in bottom pane
+        msg = self.parent.selected_message(row[0])
 
     def when_view(self, *args, **keywords):
         row = self.selected_row()
@@ -98,7 +96,8 @@ class MainLayout(npyscreen.FormBaseNew):
                  name='MESSAGES',
                  relx = 32,
                  rely = 2,
-                 scroll_exit = False,
+                 scroll_exit = True,
+                 column_width = 20,
                  max_height = h - 4)
         self.update_list()
 
@@ -114,7 +113,7 @@ class MainLayout(npyscreen.FormBaseNew):
     def h_clear(self, *args, **keywords):
         self.parentApp.subscription.clear()
         self.wMain.values = []
-        self.wMain.footer = 'Messges Count: %d'
+        self.wMain.footer = 'Messges Count: 0'
         self.wMain.display()
         #self.update_list()
 
@@ -131,20 +130,28 @@ class MainLayout(npyscreen.FormBaseNew):
         #self.update_list()
         pass
 
-    def update_list(self):
-#        npyscreen.notify('Peeking messages in subscription', title='Please wait!')
-        self.wMain.footer = 'Peeking messages...'
+    def while_waiting(self):
+        if not self.update_request:
+            return
         lst = self.parentApp.subscription.get_messages()
         self.wMain.values = [[x.sequence_number, str(x)[:50], x.enqueued_time_utc] for x in lst]
         self.wMain.footer = "Messages Count: %d" % len(self.parentApp.subscription.messages)
         self.wMain.display()
+        self.update_request = False
 
-    def get_message(self, seq_no):
+    def update_list(self):
+#        npyscreen.notify('Peeking messages in subscription', title='Please wait!')
+        self.wMain.footer = 'Peeking messages...'
+        self.wMain.display()
+        self.update_request = True
+
+    def selected_message(self, seq_no):
         l = [x for x in self.parentApp.subscription.messages if x.sequence_number == seq_no]
-        if len(l) == 1:
-            return l[0]
-        else:
+        if len(l) != 1:
             return None
+        msg = l[0]
+        # TODO: Show message details in bottom pane
+        return msg
 
 def terminal_dimensions():
     return curses.initscr().getmaxyx()
