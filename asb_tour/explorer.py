@@ -10,7 +10,7 @@ from asb_tour.sub_client import SubscriptionClient
 MSG_PAYLOAD_VIEW_FRM = 'MSG_PAYLOAD_VIEW_FRM'
 
 class MessageList(npyscreen.GridColTitles):
-    default_column_number = 3
+    default_column_number = 5
     def __init__(self, *args, **keywords):
         super(MessageList, self).__init__(*args, **keywords)
         self.col_margin = 0
@@ -18,7 +18,7 @@ class MessageList(npyscreen.GridColTitles):
         #self.column_width_requested = 25
         self.select_whole_line = True
         self.on_select_callback = self.selected
-        self.col_titles = ['SeqNo', "Body", "Enqueued Time"]
+        self.col_titles = ['MessageId', 'SeqNo', 'Label', 'Size', 'Enqueued Time']
 
     def set_up_handlers(self):
         super(MessageList, self).set_up_handlers()
@@ -35,8 +35,6 @@ class MessageList(npyscreen.GridColTitles):
     def when_view(self, *args, **keywords):
         row = self.selected_row()
         msg = self.parent.selected_message(row[0])
-        #self.parent.parentApp.getForm(MSG_PAYLOAD_VIEW_FRM).value = msg
-        #self.parent.parentApp.switchForm(MSG_PAYLOAD_VIEW_FRM)
 
     def when_exit(self, *args, **keywords):
         curses.beep()
@@ -186,7 +184,14 @@ and user/system properties here.
 
     def fetch_messages(self, topic_name='test-tp', sub_name='log'):
         lst = self.subclient.messages(topic_name, sub_name)
-        self.wMain.values = [[x.sequence_number, str(x)[:50], x.enqueued_time_utc] for x in lst]
+        self.wMain.values = [
+            [
+                x.annotations.get('MessageId'),
+                x.sequence_number,
+                x.annotations.get('Label'),
+                x.annotations.get('Size'),
+                x.enqueued_time_utc
+            ] for x in lst]
         self.wMain.footer = "Messages Count: %d" % self.subclient.message_count
         if self.subclient.message_count > 0:
             self.wMain.editable = True

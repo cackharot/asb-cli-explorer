@@ -33,9 +33,10 @@ def peek(conn_str, topic, subscription, show_user_props, show_broker_props):
 @click.option('--conn-str', required=True, envvar='SB_CONN_STR', help='Connection string to the Azure Service bus broker')
 @click.option('--topic', required=True, help='Topic name')
 @click.option('--props', default=None, help='User properties as keyvalue pairs')
+@click.option('--sys-props', default=None, help='System properties as keyvalue pairs')
 @click.option('--data-file', default=None, type=click.File('r'), help='File path , message payload')
 @click.argument('msg', required=False, metavar='<msg>')
-def send(conn_str, topic, props, data_file, msg):
+def send(conn_str, topic, props, sys_props, data_file, msg):
     """
     Send the given message with user properties to the {topic}
     <props> Message user properties e.g, key1=val1,key2=val2'
@@ -43,11 +44,14 @@ def send(conn_str, topic, props, data_file, msg):
     if data_file:
         msg = data_file.read()
     user_props = dict()
+    system_props = dict()
     if props is not None:
         user_props = dict([kv.split('=') for kv in props.split(',') if '=' in kv])
+    if sys_props is not None:
+        system_props = dict([kv.split('=') for kv in sys_props.split(',') if '=' in kv])
     settings = SimpleNamespace(**dict(conn_str=conn_str,topic=topic))
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(send_msg(settings, msg, user_props))
+    loop.run_until_complete(send_msg(settings, msg, user_props, system_props))
     pass
 
 @cli.command('explore')
