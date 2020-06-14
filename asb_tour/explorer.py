@@ -2,6 +2,7 @@ import npyscreen
 import functools
 import asyncio
 import curses
+import json
 
 from asb_tour.topic_client import TopicClient
 from asb_tour.sub_client import SubscriptionClient
@@ -34,10 +35,8 @@ class MessageList(npyscreen.GridColTitles):
     def when_view(self, *args, **keywords):
         row = self.selected_row()
         msg = self.parent.selected_message(row[0])
-        if msg is None:
-            return
-        self.parent.parentApp.getForm(MSG_PAYLOAD_VIEW_FRM).value = msg
-        self.parent.parentApp.switchForm(MSG_PAYLOAD_VIEW_FRM)
+        #self.parent.parentApp.getForm(MSG_PAYLOAD_VIEW_FRM).value = msg
+        #self.parent.parentApp.switchForm(MSG_PAYLOAD_VIEW_FRM)
 
     def when_exit(self, *args, **keywords):
         curses.beep()
@@ -64,25 +63,55 @@ class MessagesColumn(npyscreen.BoxTitle):
     _contained_widget = MessageList
     pass
 
+class MessageDetailPane(npyscreen.BoxTitle):
+    _contained_widget = npyscreen.Pager
+
+    def set_up_handlers(self):
+        super(MessageDetailPane, self).set_up_handlers()
+        self.handlers.update({
+            ord("q"): self.h_exit,
+            curses.ascii.ESC: self.h_exit,
+            "^Q": self.h_exit,
+        })
+
+    def h_exit(self, *args, **keywords):
+        curses.beep()
+        self.editing = False
+        self.parent.parentApp.switchFormNow()
+
 class MainLayout(npyscreen.FormBaseNew):
     def create(self):
         h, w = terminal_dimensions()
+        mh = int(h*0.45)
         self.wTopics = self.add(TopicsColumn,
                  name='Topics & Subscriptions',
                  relx = 2,
                  rely = 2,
                  max_width = 30,
-                 max_height = h - 4)
+                max_height = h - 4,
+                scroll_exit=False,
+                exit_right=True)
         self.wMain = self.add(MessagesColumn,
-                 name='MESSAGES',
-                 relx = 32,
-                 rely = 2,
-                 scroll_exit = True,
-                 column_width = 20,
-                 max_height = h - 4)
+                    name='MESSAGES',
+                    relx = 32,
+                    rely = 2,
+                    editable=True,
+                    scroll_exit = False,
+                    column_width = 20,
+                    max_height = mh)
+        self.wMsgDetail = self.add(MessageDetailPane,
+                              name="Message Details",
+                              relx=32,
+                              rely = mh+2,
+                              scroll_exit=True,
+                              max_height = h-mh-4,
+                              editable=True,
+                              center=False,
+                              autowrap=False)
         self.subclient = SubscriptionClient(self.parentApp.conn_str)
         self.update_request = False
         self.update_messages_request = False
+        self.h_clear()
         self.update_list()
 
     def set_up_handlers(self):
@@ -90,16 +119,25 @@ class MainLayout(npyscreen.FormBaseNew):
         self.handlers.update({
             ord("q"): self.h_exit,
             curses.ascii.ESC: self.h_exit,
+            "^Q": self.h_exit,
             "^R": self.h_refresh,
             "^K": self.h_clear,
         })
 
     def h_clear(self, *args, **keywords):
         self.subclient.clear()
+        self.wTopics.footer = ""
         self.wMain.values = []
         self.wMain.footer = 'Messges Count: 0'
-        self.wMain.display()
-        #self.update_list()
+        self.wMsgDetail.values = """
+Select a subscription, messages will be displayed above and
+you can scroll through the messages to see the full payload
+and user/system properties here.
+* Press 'Ctrl+R' to refresh topics and messages.
+* Press 'Ctrl+K' to clear topics and messages.
+* Press ESC or 'q' or 'Ctrl+Q' to quit the application.
+        """.split("\n")
+        self.display()
 
     def h_refresh(self, *args, **keywords):
         self.update_list()
@@ -150,16 +188,29 @@ class MainLayout(npyscreen.FormBaseNew):
         lst = self.subclient.messages(topic_name, sub_name)
         self.wMain.values = [[x.sequence_number, str(x)[:50], x.enqueued_time_utc] for x in lst]
         self.wMain.footer = "Messages Count: %d" % self.subclient.message_count
+        if self.subclient.message_count > 0:
+            self.wMain.editable = True
+            self.wMain.edit()
         self.wMain.display()
 
     def update_list(self):
         self.wTopics.footer = 'Loading...'
-        self.wTopics.display()
+        self.wMain.editable = False
+        self.wMsgDetail.editable = False
         self.update_request = True
+        self.display()
 
     def selected_message(self, seqno):
         msg = self.subclient.find_message(seqno)
-        # TODO: Show message details in bottom pane
+        fmtMsg = msg
+        try:
+            fmtMsg = json.dumps(json.loads(str(msg)), indent=2, sort_keys=True).split("\n")
+        except Exception as e:
+            print(e)
+            pass
+        self.wMsgDetail.values = fmtMsg
+        self.wMsgDetail.editable = True
+        self.wMsgDetail.display()
         return msg
 
 def terminal_dimensions():
@@ -174,31 +225,7 @@ class MsgExplorerApp(npyscreen.NPSAppManaged):
 
     def onStart(self):
         self.addForm("MAIN", MainLayout, name = "Azure Service Bus Explorer")
-        self.addForm(MSG_PAYLOAD_VIEW_FRM, MessageViewRecord)
-
-class MessageViewRecord(npyscreen.ActionForm):
-    def create(self):
-        self.value = None
-        self.wgBody = self.add(npyscreen.TitleText, name = "Body:",)
-
-    def beforeEditing(self):
-        if self.value:
-            msg = self.value
-            self.name = "Message id : %s" % (msg.sequence_number)
-#            self.message_id         = msg.message_id
-            self.seq_no             = msg.sequence_number
-            self.wgBody.value       = str(msg)
-        else:
-            self.name = "New Message"
-#            self.message_id     = ''
-            self.seq_no         = ''
-            self.wgBody.value   = ''
-
-    def on_ok(self):
-        self.parentApp.switchFormPrevious()
-
-    def on_cancel(self):
-        self.parentApp.switchFormPrevious()
+        #self.addForm(MSG_PAYLOAD_VIEW_FRM, MessageViewRecord)
 
 def run_tui(conn_str, *args):
     #npyscreen.setTheme(npyscreen.Themes.ColorfulTheme)
@@ -208,4 +235,3 @@ def run_tui(conn_str, *args):
 
 def tui_app(conn_str):
     npyscreen.wrapper_basic(functools.partial(run_tui, conn_str))
-    print('Done')
