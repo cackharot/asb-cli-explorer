@@ -120,7 +120,9 @@ class MainLayout(npyscreen.FormBaseNew):
                                   max_height= h - mh - 4,
                                   scroll_exit=True,
                                   exit_left=True)
-        self.subclient = SubscriptionClient(self.parentApp.conn_str)
+        self._subclients = dict()
+        self.topic_name = None
+        self.sub_name = None
         self.update_request = False
         self.update_messages_request = False
         self.h_clear()
@@ -137,7 +139,8 @@ class MainLayout(npyscreen.FormBaseNew):
         })
 
     def h_clear(self, *args, **keywords):
-        self.subclient.clear()
+        for _,client in self._subclients.items():
+            client.clear()
         self.wTopics.footer = ""
         self.wMain.values = []
         self.wMain.footer = 'Messges Count: 0'
@@ -153,6 +156,8 @@ and user/system properties here.
 
     def h_refresh(self, *args, **keywords):
         self.update_list()
+        if self.topic_name and self.sub_name:
+            self.fetch_messages_request(self.topic_name, self.sub_name)
 
     def h_exit(self, *args, **keywords):
         curses.beep()
@@ -179,26 +184,38 @@ and user/system properties here.
         treedata = npyscreen.NPSTreeData(content=tp.namespace, selectable=True,ignoreRoot=False)
         tpc = subc = 0
         for topic_name,sb_lst in lst:
-            t = treedata.newChild(content=topic_name, selectable=False, selected=False)
+            tp_selected = self.topic_name == topic_name
+            t = treedata.newChild(content=topic_name, selectable=False, selected=tp_selected)
             tpc = tpc + 1
             for sb in sb_lst:
+                sb_selected = self.sub_name == sb.name
                 title = "%s (%d)" % (sb.name, sb.message_count)
-                t.newChild(content=title, selectable=True)
+                t.newChild(content=title, selectable=True, selected=sb_selected)
                 subc = subc + 1
         self.wTopics.values = treedata
         self.wTopics.footer = "Topics (%s), Subs (%d)" % (tpc, subc)
         self.wTopics.display()
 
     def fetch_messages_request(self, topic_name, sub_name):
+        if topic_name != self.topic_name or sub_name != self.sub_name:
+            self.wMain.values = []
         self.topic_name = topic_name
         self.sub_name = sub_name
         self.update_messages_request = True
         self.wMain.footer = 'Peeking messages...'
-        self.wMain.values = []
         self.wMain.display()
 
+    def get_subclient(self, topic_name, sub_name):
+        key = "{0}-{1}".format(topic_name, sub_name)
+        if key in self._subclients:
+            return self._subclients[key]
+        client = SubscriptionClient(self.parentApp.conn_str, topic_name, sub_name)
+        self._subclients[key] = client
+        return client
+
     def fetch_messages(self, topic_name, sub_name):
-        lst = self.subclient.messages(topic_name, sub_name)
+        client = self.get_subclient(topic_name, sub_name)
+        lst = client.messages()
         self.wMain.values = [
             [
                 x.message_id,
@@ -207,8 +224,8 @@ and user/system properties here.
                 x.size,
                 x.enqueued_time_utc
             ] for x in lst]
-        self.wMain.footer = "Messages Count: %d" % self.subclient.message_count
-        self.wMain.editable = self.subclient.message_count > 0
+        self.wMain.footer = "Messages Count: %d" % client.message_count
+        self.wMain.editable = client.message_count > 0
         self.wMain.display()
 
     def update_list(self):
@@ -220,7 +237,8 @@ and user/system properties here.
         self.display()
 
     def selected_message(self, msgid):
-        msg = self.subclient.find_message(msgid)
+        client = self.get_subclient(self.topic_name, self.sub_name)
+        msg = client.find_message(msgid)
         self.wMsgDetail.values = msg.body.split('\n') if msg.body else ''
         if not self.wMsgDetail.editable:
             self.wMsgDetail.editable = True

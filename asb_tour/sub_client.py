@@ -5,8 +5,10 @@ from azure.servicebus import Message
 from azure.servicebus.aio import ServiceBusClient
 
 class SubscriptionClient(object):
-    def __init__(self, conn_str):
+    def __init__(self, conn_str, topic_name, sub_name):
         self._conn_str = conn_str
+        self.topic_name = topic_name
+        self.sub_name = sub_name
         self._sequence_number = 0
         self._loop = asyncio.get_event_loop()
         self._messages = []
@@ -14,11 +16,11 @@ class SubscriptionClient(object):
     def _getbus(self):
         return ServiceBusClient.from_connection_string(conn_str=self._conn_str)
 
-    async def _peek_loop(self, tp_name, sub_name):
+    async def _peek_loop(self):
         async with self._getbus() as bus:
             receiver = bus.get_subscription_receiver(
-                topic_name=tp_name,
-                subscription_name=sub_name,
+                topic_name=self.topic_name,
+                subscription_name=self.sub_name,
                 prefetch=50
             )
             async with receiver:
@@ -40,8 +42,8 @@ class SubscriptionClient(object):
             (x for x in self._messages if x.message_id == msgid),
             None)
 
-    def messages(self, tp_name, sub_name):
-        self._loop.run_until_complete(self._peek_loop(tp_name, sub_name))
+    def messages(self):
+        self._loop.run_until_complete(self._peek_loop())
         return self._messages
 
     def _fmt_msg_body(self, msg):
