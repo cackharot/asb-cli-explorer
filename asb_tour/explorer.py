@@ -2,45 +2,11 @@ import npyscreen
 import functools
 import asyncio
 import curses
-from azure.servicebus import Message
-from azure.servicebus.aio import ServiceBusClient
 
 from asb_tour.topic_client import TopicClient
+from asb_tour.sub_client import SubscriptionClient
 
 MSG_PAYLOAD_VIEW_FRM = 'MSG_PAYLOAD_VIEW_FRM'
-
-class MessageRepo(object):
-    def __init__(self, conn_str, topic, subscription):
-        self.conn_str = conn_str
-        self.topic = topic
-        self.subscription = subscription
-        self.sequence_number = 0
-        self.messages = []
-        self.loop = asyncio.get_event_loop()
-
-    def getbus(self):
-        return ServiceBusClient.from_connection_string(conn_str=self.conn_str)
-
-    async def _peek_loop(self):
-        async with self.getbus() as bus:
-            receiver = bus.get_subscription_receiver(
-                topic_name=self.topic,
-                subscription_name=self.subscription,
-                prefetch=50
-            )
-            async with receiver:
-                received_msgs = await receiver.peek(message_count=50, sequence_number=self.sequence_number)
-                for msg in received_msgs:
-                    self.messages.append(msg)
-                    self.sequence_number = msg.sequence_number + 1
-
-    def clear(self):
-        self.messages = []
-        self.sequence_number = 0
-
-    def get_messages(self):
-        self.loop.run_until_complete(self._peek_loop())
-        return self.messages
 
 class MessageList(npyscreen.GridColTitles):
     default_column_number = 3
@@ -79,8 +45,16 @@ class MessageList(npyscreen.GridColTitles):
         self.editing = False
         self.parent.parentApp.switchFormNow()
 
-class TopicsTreeWidget(npyscreen.MLTreeAnnotatedAction):
-    pass
+class TopicsTreeWidget(npyscreen.MLTreeAction):
+    def actionHighlighted(self, treenode, key_press):
+        if key_press != curses.ascii.NL:
+            return
+        if treenode.hasChildren():
+            # topic or ns selected
+            return
+        sub_name = treenode.content.split(' ')[0]
+        topic_name = treenode.getParent().content
+        self.parent.fetch_messages_request(topic_name, sub_name)
 
 class TopicsColumn(npyscreen.BoxTitle):
     _contained_widget = TopicsTreeWidget
@@ -106,6 +80,9 @@ class MainLayout(npyscreen.FormBaseNew):
                  scroll_exit = True,
                  column_width = 20,
                  max_height = h - 4)
+        self.subclient = SubscriptionClient(self.parentApp.conn_str)
+        self.update_request = False
+        self.update_messages_request = False
         self.update_list()
 
     def set_up_handlers(self):
@@ -118,7 +95,7 @@ class MainLayout(npyscreen.FormBaseNew):
         })
 
     def h_clear(self, *args, **keywords):
-        self.parentApp.subscription.clear()
+        self.subclient.clear()
         self.wMain.values = []
         self.wMain.footer = 'Messges Count: 0'
         self.wMain.display()
@@ -138,41 +115,50 @@ class MainLayout(npyscreen.FormBaseNew):
         pass
 
     def while_waiting(self):
-        if not self.update_request:
-            return
-        self.fetch_messages()
-        self.fetch_topics()
-        self.update_request = False
+        if self.update_request:
+            self.fetch_topics()
+            self.update_request = False
+
+        if self.update_messages_request:
+            self.fetch_messages(self.topic_name, self.sub_name)
+            self.update_messages_request = False
 
     def fetch_topics(self):
         tp = self.parentApp.tp_client
         lst = tp.topics()
         treedata = npyscreen.NPSTreeData(content=tp.namespace, selectable=True,ignoreRoot=False)
+        tpc = subc = 0
         for topic_name,sb_lst in lst:
             t = treedata.newChild(content=topic_name, selectable=False, selected=False)
+            tpc = tpc + 1
             for sb in sb_lst:
                 title = "%s (%d)" % (sb.name, sb.message_count)
                 t.newChild(content=title, selectable=True)
+                subc = subc + 1
         self.wTopics.values = treedata
+        self.wTopics.footer = "Topics (%s), Subs (%d)" % (tpc, subc)
         self.wTopics.display()
-        pass
 
-    def fetch_messages(self):
-        lst = self.parentApp.subscription.get_messages()
+    def fetch_messages_request(self, topic_name, sub_name):
+        self.topic_name = topic_name
+        self.sub_name = sub_name
+        self.update_messages_request = True
+        self.wMain.footer = 'Peeking messages...'
+        self.wMain.display()
+
+    def fetch_messages(self, topic_name='test-tp', sub_name='log'):
+        lst = self.subclient.messages(topic_name, sub_name)
         self.wMain.values = [[x.sequence_number, str(x)[:50], x.enqueued_time_utc] for x in lst]
-        self.wMain.footer = "Messages Count: %d" % len(self.parentApp.subscription.messages)
+        self.wMain.footer = "Messages Count: %d" % self.subclient.message_count
         self.wMain.display()
 
     def update_list(self):
-        self.wMain.footer = 'Peeking messages...'
-        self.wMain.display()
+        self.wTopics.footer = 'Loading...'
+        self.wTopics.display()
         self.update_request = True
 
-    def selected_message(self, seq_no):
-        l = [x for x in self.parentApp.subscription.messages if x.sequence_number == seq_no]
-        if len(l) != 1:
-            return None
-        msg = l[0]
+    def selected_message(self, seqno):
+        msg = self.subclient.find_message(seqno)
         # TODO: Show message details in bottom pane
         return msg
 
@@ -183,7 +169,6 @@ class MsgExplorerApp(npyscreen.NPSAppManaged):
     def __init__(self, conn_str, *args, **kwargs):
         super(MsgExplorerApp, self).__init__(*args, **kwargs)
         self.conn_str = conn_str
-        self.subscription = MessageRepo(self.conn_str, 'test-tp', 'log')
         self.tp_client = TopicClient(self.conn_str)
         self.keypress_timeout_default = 3
 
