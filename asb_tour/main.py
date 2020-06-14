@@ -91,14 +91,13 @@ async def peek_loop(settings):
               await asyncio.sleep(0.25)
 
 
-async def send_msg(settings, body, user_props):
+async def send_msg(settings, body, user_props, system_props):
   client = ServiceBusClient.from_connection_string(conn_str=settings.conn_str)
   async with client:
     sender = client.get_topic_sender(topic_name=settings.topic)
     async with sender:
-      msg = Message(body, subject=user_props.get('label', None))
-      if 'label' in user_props:
-        user_props.pop('label')
+      msg = Message(body, subject=system_props.get('Label', None))
+      msg.annotations = system_props
       msg.user_properties = user_props
       await sender.send(msg)
       print(f"Successfully sent message to topic '{settings.topic}'")

@@ -61,6 +61,9 @@ class SubscriptionClient(object):
             size = msg.message.get_message_encoded_size(),
             body = self._fmt_msg_body(msg)
         )
+        ap = self._get_user_props(msg)
+        ap.update(self._get_system_props(msg))
+        m['all_properties'] = ap
         return SimpleNamespace(**m)
 
     def _get_system_props(self, msg):

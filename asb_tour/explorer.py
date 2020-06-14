@@ -61,6 +61,10 @@ class MessagesColumn(npyscreen.BoxTitle):
     _contained_widget = MessageList
     pass
 
+class MessagePropsPane(npyscreen.BoxTitle):
+    _contained_widget = npyscreen.MultiLine
+    pass
+
 class MessageDetailPane(npyscreen.BoxTitle):
     _contained_widget = npyscreen.Pager
 
@@ -81,6 +85,7 @@ class MainLayout(npyscreen.FormBaseNew):
     def create(self):
         h, w = terminal_dimensions()
         mh = int(h*0.45)
+        dw = int((w-32)*.6)
         self.wTopics = self.add(TopicsColumn,
                  name='Topics & Subscriptions',
                  relx = 2,
@@ -98,14 +103,23 @@ class MainLayout(npyscreen.FormBaseNew):
                     column_width = 20,
                     max_height = mh)
         self.wMsgDetail = self.add(MessageDetailPane,
-                              name="Message Details",
-                              relx=32,
-                              rely = mh+2,
-                              scroll_exit=True,
-                              max_height = h-mh-4,
-                              editable=True,
-                              center=False,
-                              autowrap=False)
+                                   name="Message Payload",
+                                   relx=32,
+                                   rely = mh+2,
+                                   scroll_exit=True,
+                                   exit_right=True,
+                                   max_height = h-mh-4,
+                                   width = dw,
+                                   editable=True,
+                                   center=False,
+                                   autowrap=True)
+        self.wMsgProps = self.add(MessagePropsPane,
+                                  name="Message Properties",
+                                  relx = 32 + dw,
+                                  rely = mh+2,
+                                  max_height= h - mh - 4,
+                                  scroll_exit=True,
+                                  exit_left=True)
         self.subclient = SubscriptionClient(self.parentApp.conn_str)
         self.update_request = False
         self.update_messages_request = False
@@ -180,9 +194,10 @@ and user/system properties here.
         self.sub_name = sub_name
         self.update_messages_request = True
         self.wMain.footer = 'Peeking messages...'
+        self.wMain.values = []
         self.wMain.display()
 
-    def fetch_messages(self, topic_name='test-tp', sub_name='log'):
+    def fetch_messages(self, topic_name, sub_name):
         lst = self.subclient.messages(topic_name, sub_name)
         self.wMain.values = [
             [
@@ -200,6 +215,7 @@ and user/system properties here.
         self.wTopics.footer = 'Loading...'
         self.wMain.editable = False
         self.wMsgDetail.editable = False
+        self.wMsgProps.editable = False
         self.update_request = True
         self.display()
 
@@ -208,7 +224,13 @@ and user/system properties here.
         self.wMsgDetail.values = msg.body.split('\n') if msg.body else ''
         if not self.wMsgDetail.editable:
             self.wMsgDetail.editable = True
+            self.wMsgProps.editable = True
+        self.wMsgProps.values = [
+            "{0:15.15}\t{1}".format(k, v)
+            for k,v in msg.all_properties.items()
+        ]
         self.wMsgDetail.display()
+        self.wMsgProps.display()
         return msg
 
 def terminal_dimensions():
