@@ -15,14 +15,14 @@ def cli():
 @click.option('--topic', required=True, help='Topic name')
 @click.option('--subscription', required=True, help='Topic name')
 @click.option('--show-user-props', is_flag=True, default=False, help='Show user properties on message?')
-@click.option('--show-broker-props', is_flag=True, default=False, help='Show broker properties on message?')
-def peek(conn_str, topic, subscription, show_user_props, show_broker_props):
+@click.option('--show-system-props', is_flag=True, default=False, help='Show system properties on message?')
+def peek(conn_str, topic, subscription, show_user_props, show_system_props):
     opt = dict(
         conn_str=conn_str,
         topic=topic,
         subscription=subscription,
         show_user_props=show_user_props,
-        show_broker_props=show_broker_props
+        show_system_props=show_system_props
     )
     settings = SimpleNamespace(**opt)
     loop = asyncio.get_event_loop()

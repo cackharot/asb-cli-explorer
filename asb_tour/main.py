@@ -7,9 +7,26 @@ from azure.servicebus import Message
 from azure.servicebus.aio import ServiceBusClient
 
 def getmsgprops(msg):
-  bp = dict()
-  for key, value in msg.properties.__dict__.items():
-    bp[key] = str(value)
+  sp = msg.properties
+  bp = dict(
+    message_id = sp.message_id.decode('utf-8'),
+    label = sp.subject.decode('utf-8') if sp.subject is not None else '',
+    content_type = sp.content_type.decode('utf-8') if sp.content_type else '',
+    creation_time = str(sp.creation_time) if sp.creation_time else '',
+    content_encoding = sp.content_encoding.decode('utf-8') if sp.content_encoding else '',
+    correlation_id = sp.correlation_id.decode() if sp.correlation_id else '',
+    to = sp.to.decode() if sp.to else '',
+    reply_to = sp.reply_to.decode() if sp.reply_to else '',
+    user_id = sp.user_id.decode()  if sp.user_id else '',
+    size = msg.message.get_message_encoded_size()
+  )
+  for key,value in msg.annotations.items():
+    val = value
+    if isinstance(value, str):
+      val = value
+    elif isinstance(value, bytes):
+      val = value.decode('utf-8')
+    bp[key.decode()] = val
   return bp
 
 def getusrprops(msg):
@@ -30,13 +47,18 @@ def display_msg(msg, settings):
   try:
     pl = json.loads(str(msg))
   except Exception as e:
+    print(e)
     pl['raw_body'] = str(msg)
 
   if settings.show_user_props:
     pl['user_props'] = getusrprops(msg)
-  if settings.show_broker_props:
-    pl['broker_props'] = getmsgprops(msg)
-  print(json.dumps(pl), flush=True)
+  if settings.show_system_props:
+    pl['system_props'] = getmsgprops(msg)
+  try:
+    print(json.dumps(pl), flush=True)
+  except Exception as e:
+    print(e)
+    print(str(msg))
 
 def ask_exit(signame, loop, cancel_request):
     cancel_request.set()
