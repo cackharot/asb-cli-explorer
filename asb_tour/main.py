@@ -88,7 +88,7 @@ async def peek_loop(settings):
               for msg in received_msgs:
                 display_msg(msg, settings)
                 sno = msg.sequence_number + 1
-              await asyncio.sleep(0.15)
+              await asyncio.sleep(0.25)
 
 
 async def send_msg(settings, body, user_props):

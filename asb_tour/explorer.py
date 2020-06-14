@@ -186,16 +186,14 @@ and user/system properties here.
         lst = self.subclient.messages(topic_name, sub_name)
         self.wMain.values = [
             [
-                x.annotations.get('MessageId'),
+                x.message_id,
                 x.sequence_number,
-                x.annotations.get('Label'),
-                x.annotations.get('Size'),
+                x.label,
+                x.size,
                 x.enqueued_time_utc
             ] for x in lst]
         self.wMain.footer = "Messages Count: %d" % self.subclient.message_count
-        if self.subclient.message_count > 0:
-            self.wMain.editable = True
-            self.wMain.edit()
+        self.wMain.editable = self.subclient.message_count > 0
         self.wMain.display()
 
     def update_list(self):
@@ -205,16 +203,11 @@ and user/system properties here.
         self.update_request = True
         self.display()
 
-    def selected_message(self, seqno):
-        msg = self.subclient.find_message(seqno)
-        fmtMsg = msg
-        try:
-            fmtMsg = json.dumps(json.loads(str(msg)), indent=2, sort_keys=True).split("\n")
-        except Exception as e:
-            print(e)
-            pass
-        self.wMsgDetail.values = fmtMsg
-        self.wMsgDetail.editable = True
+    def selected_message(self, msgid):
+        msg = self.subclient.find_message(msgid)
+        self.wMsgDetail.values = msg.body.split('\n') if msg.body else ''
+        if not self.wMsgDetail.editable:
+            self.wMsgDetail.editable = True
         self.wMsgDetail.display()
         return msg
 

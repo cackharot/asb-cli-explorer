@@ -1,4 +1,6 @@
 import asyncio
+import json
+from types import SimpleNamespace
 from azure.servicebus import Message
 from azure.servicebus.aio import ServiceBusClient
 
@@ -22,7 +24,7 @@ class SubscriptionClient(object):
             async with receiver:
                 received_msgs = await receiver.peek(message_count=50, sequence_number=self._sequence_number)
                 for msg in received_msgs:
-                    self._messages.append(msg)
+                    self._messages.append(self._tomsg(msg))
                     self._sequence_number = msg.sequence_number + 1
 
     def clear(self):
@@ -33,12 +35,67 @@ class SubscriptionClient(object):
     def message_count(self):
         return len(self._messages)
 
-    def find_message(self, seqno):
-        l = [x for x in self._messages if x.sequence_number == seqno]
-        if len(l) == 1:
-            return l[0]
-        return None
+    def find_message(self, msgid):
+        return next(
+            (x for x in self._messages if x.message_id == msgid),
+            None)
 
     def messages(self, tp_name, sub_name):
         self._loop.run_until_complete(self._peek_loop(tp_name, sub_name))
         return self._messages
+
+    def _fmt_msg_body(self, msg):
+        try:
+            return json.dumps(json.loads(str(msg)), indent=2, sort_keys=True)
+        except Exception as e:
+            return str(msg)
+
+    def _tomsg(self, msg):
+        sp = msg.properties
+        m = dict(
+            message_id = sp.message_id.decode('utf-8'),
+            sequence_number = msg.sequence_number,
+            enqueued_time_utc = msg.enqueued_time_utc,
+            user_properties = self._get_user_props(msg),
+            label = sp.subject.decode('utf-8') if sp.subject is not None else '',
+            size = msg.message.get_message_encoded_size(),
+            body = self._fmt_msg_body(msg)
+        )
+        return SimpleNamespace(**m)
+
+    def _get_system_props(self, msg):
+        sp = msg.properties
+        bp = dict(
+            message_id = sp.message_id.decode('utf-8'),
+            label = sp.subject.decode('utf-8') if sp.subject is not None else '',
+            content_type = sp.content_type.decode('utf-8') if sp.content_type else '',
+            creation_time = str(sp.creation_time) if sp.creation_time else '',
+            content_encoding = sp.content_encoding.decode('utf-8') if sp.content_encoding else '',
+            correlation_id = sp.correlation_id.decode() if sp.correlation_id else '',
+            to = sp.to.decode() if sp.to else '',
+            reply_to = sp.reply_to.decode() if sp.reply_to else '',
+            user_id = sp.user_id.decode()  if sp.user_id else '',
+            size = msg.message.get_message_encoded_size()
+        )
+        for key,value in msg.annotations.items():
+            val = value
+            if isinstance(value, str):
+                val = value
+            elif isinstance(value, bytes):
+                val = value.decode('utf-8')
+            bp[key.decode()] = val
+        return bp
+
+    def _get_user_props(self, msg):
+        up = dict()
+        if msg.user_properties is None:
+            return up
+        for key, value in msg.user_properties.items():
+            val = value
+            if isinstance(value, str):
+                val = value
+            elif isinstance(value, bytes):
+                val = value.decode('utf-8')
+            up[key.decode("utf-8")] = val
+        return up
+
