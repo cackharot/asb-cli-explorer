@@ -1,8 +1,10 @@
 import click
 import asyncio
+import json
 from types import SimpleNamespace
 from asb_tour.main import peek_loop, send_msg
 from asb_tour.explorer import tui_app
+from asb_tour.topic_client import TopicClient
 
 @click.group()
 def cli():
@@ -50,3 +52,9 @@ def send(conn_str, topic, props, msg):
 def explore(conn_str):
     tui_app(conn_str)
     pass
+
+@cli.command('list')
+@click.option('--conn-str', required=True, envvar='SB_CONN_STR', help='Connection string to the Azure Service bus broker. Must be a management key!')
+def list(conn_str):
+    tc = TopicClient(conn_str)
+    click.echo(json.dumps(tc.topics()))
