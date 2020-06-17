@@ -6,6 +6,7 @@ import json
 
 from asb_tour.topic_client import TopicClient
 from asb_tour.sub_client import SubscriptionClient
+from asb_tour.dlq_client import DlqClient
 
 MSG_PAYLOAD_VIEW_FRM = 'MSG_PAYLOAD_VIEW_FRM'
 
@@ -46,12 +47,13 @@ class TopicsTreeWidget(npyscreen.MLTreeAction):
     def actionHighlighted(self, treenode, key_press):
         if key_press != curses.ascii.NL:
             return
-        if treenode.hasChildren():
+        c = treenode.content
+        if treenode.hasChildren() and (c != 'queue' or c != 'dlq'):
             # topic or ns selected
             return
-        sub_name = treenode.content.split(' ')[0]
-        topic_name = treenode.getParent().content
-        self.parent.fetch_messages_request(topic_name, sub_name)
+        sub_name = treenode.getParent().content.split(' ')[0]
+        topic_name = treenode.getParent().getParent().content
+        self.parent.fetch_messages_request(topic_name, sub_name, is_dlq=c=='dlq')
 
 class TopicsColumn(npyscreen.BoxTitle):
     _contained_widget = TopicsTreeWidget
@@ -121,8 +123,10 @@ class MainLayout(npyscreen.FormBaseNew):
                                   scroll_exit=True,
                                   exit_left=True)
         self._subclients = dict()
+        self._dlqclients = dict()
         self.topic_name = None
         self.sub_name = None
+        self.is_dlq = False
         self.update_request = False
         self.update_messages_request = False
         self.h_clear()
@@ -157,7 +161,7 @@ and user/system properties here.
     def h_refresh(self, *args, **keywords):
         self.update_list()
         if self.topic_name and self.sub_name:
-            self.fetch_messages_request(self.topic_name, self.sub_name)
+            self.fetch_messages_request(self.topic_name, self.sub_name, self.is_dlq)
 
     def h_exit(self, *args, **keywords):
         curses.beep()
@@ -175,7 +179,7 @@ and user/system properties here.
             self.update_request = False
 
         if self.update_messages_request:
-            self.fetch_messages(self.topic_name, self.sub_name)
+            self.fetch_messages(self.topic_name, self.sub_name, self.is_dlq)
             self.update_messages_request = False
 
     def fetch_topics(self):
@@ -190,32 +194,42 @@ and user/system properties here.
             for sb in sb_lst:
                 sb_selected = self.sub_name == sb.name
                 title = "%s (%d)" % (sb.name, sb.message_count)
-                t.newChild(content=title, selectable=True, selected=sb_selected)
+                sub_node = t.newChild(content=title, selectable=True, selected=sb_selected)
+                sub_node.newChild(content='queue', selectable=True)
+                sub_node.newChild(content='dlq', selectable=True)
                 subc = subc + 1
         self.wTopics.values = treedata
         self.wTopics.footer = "Topics (%s), Subs (%d)" % (tpc, subc)
         self.wTopics.display()
 
-    def fetch_messages_request(self, topic_name, sub_name):
+    def fetch_messages_request(self, topic_name, sub_name, is_dlq=False):
         if topic_name != self.topic_name or sub_name != self.sub_name:
             self.wMain.values = []
         self.topic_name = topic_name
         self.sub_name = sub_name
+        self.is_dlq = is_dlq
         self.update_messages_request = True
-        self.wMain.footer = 'Peeking messages...'
+        self.wMain.footer = "Peeking {} messages...".format('dlq' if is_dlq else '')
         self.wMain.display()
 
-    def get_subclient(self, topic_name, sub_name):
+    def get_subclient(self, topic_name, sub_name, is_dlq):
         key = "{0}-{1}".format(topic_name, sub_name)
-        if key in self._subclients:
+        if is_dlq and key in self._dlqclients:
+            return self._dlqclients[key]
+        if not is_dlq and key in self._subclients:
             return self._subclients[key]
-        client = SubscriptionClient(self.parentApp.conn_str, topic_name, sub_name)
-        self._subclients[key] = client
+
+        if is_dlq:
+            client = DlqClient(self.parentApp.conn_str, topic_name, sub_name)
+            self._dlqclients[key] = client
+        else:
+            client = SubscriptionClient(self.parentApp.conn_str, topic_name, sub_name)
+            self._subclients[key] = client
         return client
 
-    def fetch_messages(self, topic_name, sub_name):
-        client = self.get_subclient(topic_name, sub_name)
-        lst = client.messages()
+    def fetch_messages(self, topic_name, sub_name, is_dlq):
+        client = self.get_subclient(topic_name, sub_name, is_dlq)
+        lst = client.peek(50)
         self.wMain.values = [
             [
                 x.message_id,
@@ -224,7 +238,7 @@ and user/system properties here.
                 x.size,
                 x.enqueued_time_utc
             ] for x in lst]
-        self.wMain.footer = "Messages Count: %d" % client.message_count
+        self.wMain.footer = "Messages Count: {}".format(client.message_count)
         self.wMain.editable = client.message_count > 0
         self.wMain.display()
 
@@ -237,7 +251,7 @@ and user/system properties here.
         self.display()
 
     def selected_message(self, msgid):
-        client = self.get_subclient(self.topic_name, self.sub_name)
+        client = self.get_subclient(self.topic_name, self.sub_name, self.is_dlq)
         msg = client.find_message(msgid)
         payload = ''
         if isinstance(msg.body, str):

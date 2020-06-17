@@ -16,15 +16,15 @@ class SubscriptionClient(object):
     def _getbus(self):
         return ServiceBusClient.from_connection_string(conn_str=self._conn_str)
 
-    async def _peek_loop(self):
+    async def _peek_loop(self, count):
         async with self._getbus() as bus:
             receiver = bus.get_subscription_receiver(
                 topic_name=self.topic_name,
                 subscription_name=self.sub_name,
-                prefetch=50
+                prefetch=count
             )
             async with receiver:
-                received_msgs = await receiver.peek(message_count=50, sequence_number=self._sequence_number)
+                received_msgs = await receiver.peek(message_count=count, sequence_number=self._sequence_number)
                 for msg in received_msgs:
                     self._messages.append(self._tomsg(msg))
                     self._sequence_number = msg.sequence_number + 1
@@ -42,8 +42,8 @@ class SubscriptionClient(object):
             (x for x in self._messages if x.message_id == msgid),
             None)
 
-    def messages(self):
-        self._loop.run_until_complete(self._peek_loop())
+    def peek(self, count=50):
+        self._loop.run_until_complete(self._peek_loop(count))
         return self._messages
 
     def _fmt_msg_body(self, msg):
