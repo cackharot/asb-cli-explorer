@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from asb_tour.main import peek_loop, send_msg
 from asb_tour.explorer import tui_app
 from asb_tour.topic_client import TopicClient
+from asb_tour.sub_client import SubscriptionClient
+from asb_tour.dlq_client import DlqClient
 
 @click.group()
 def cli():
@@ -57,6 +59,10 @@ def send(conn_str, topic, props, sys_props, data_file, msg):
 @cli.command('explore')
 @click.option('--conn-str', required=True, envvar='SB_CONN_STR', help='Connection string to the Azure Service bus broker. Must be a management key!')
 def explore(conn_str):
+    """
+    Opens a TUI to explore the topics and subscription details,
+    also peek subscriptions messages and it's DLQ
+    """
     tui_app(conn_str)
     pass
 
@@ -71,3 +77,40 @@ def list(conn_str):
     for t,sub in tc.topics():
         data[t] = [s.name for s in sub]
     click.echo(json.dumps(data))
+
+@cli.group()
+def dlq():
+    """
+    Commands to process Dead Letter Queues. Has subcommands, peek and move, purge
+    """
+    pass
+
+@dlq.command('peek')
+@click.option('--conn-str', required=True, envvar='SB_CONN_STR', help='Connection string to the Azure Service bus broker. Must be a management key!')
+@click.option('--topic', required=True, help='Topic name')
+@click.option('--sub', required=True, help='Subscripton name')
+@click.option('--count', required=True, help='Number of messages to peek', type=int)
+def dlq_peek(conn_str, topic, sub, count):
+    """
+    Peek given number of messages from the DLQ
+    """
+    dc = DlqClient(conn_str, topic, sub)
+    msgs = dc.peek(count)
+    for msg in msgs:
+        d = msg.__dict__
+        print(json.dumps(d, sort_keys=True, default=str), flush=True)
+    pass
+
+@dlq.command('move')
+def dlq_move():
+    """
+    Move the list of message_id's from DLQ to the given topic
+    """
+    pass
+
+@dlq.command('purge')
+def dlq_purge():
+    """
+    Deletes all messages from DLQ
+    """
+    pass

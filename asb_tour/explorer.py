@@ -239,7 +239,12 @@ and user/system properties here.
     def selected_message(self, msgid):
         client = self.get_subclient(self.topic_name, self.sub_name)
         msg = client.find_message(msgid)
-        self.wMsgDetail.values = msg.body.split('\n') if msg.body else ''
+        payload = ''
+        if isinstance(msg.body, str):
+            payload = msg.body
+        elif isinstance(msg.body, dict):
+            payload = json.dumps(msg.body, indent=2, sort_keys=True, default=str)
+        self.wMsgDetail.values = payload.split('\n')
         if not self.wMsgDetail.editable:
             self.wMsgDetail.editable = True
             self.wMsgProps.editable = True

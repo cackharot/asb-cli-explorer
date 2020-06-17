@@ -48,7 +48,7 @@ class SubscriptionClient(object):
 
     def _fmt_msg_body(self, msg):
         try:
-            return json.dumps(json.loads(str(msg)), indent=2, sort_keys=True)
+            return json.loads(str(msg))
         except Exception as e:
             return str(msg)
 
@@ -58,7 +58,6 @@ class SubscriptionClient(object):
             message_id = sp.message_id.decode('utf-8'),
             sequence_number = msg.sequence_number,
             enqueued_time_utc = msg.enqueued_time_utc,
-            user_properties = self._get_user_props(msg),
             label = sp.subject.decode('utf-8') if sp.subject is not None else '',
             size = msg.message.get_message_encoded_size(),
             body = self._fmt_msg_body(msg)
