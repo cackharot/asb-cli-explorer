@@ -63,5 +63,11 @@ def explore(conn_str):
 @cli.command('list')
 @click.option('--conn-str', required=True, envvar='SB_CONN_STR', help='Connection string to the Azure Service bus broker. Must be a management key!')
 def list(conn_str):
+    """
+    List available topics and its subscriptions
+    """
     tc = TopicClient(conn_str)
-    click.echo(json.dumps(tc.topics()))
+    data = dict()
+    for t,sub in tc.topics():
+        data[t] = [s.name for s in sub]
+    click.echo(json.dumps(data))
