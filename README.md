@@ -26,25 +26,26 @@ Peek/stream messge from a subscription asynchronously forever. Press 'Ctrl+C' to
 
 ```bash
 export SB_CONN_STR="Endpoint=sb://<full conn string having receiver or manage role>"
-asb-tour peek --topic test-topic --subscription log --show-user-props --show-system-props
+asb-tour peek --topic=test-topic --subscription=log --show-user-props --show-system-props
 
 # optionaly pipe it to `jq` to get pretty printing and futher transformations
-asb-tour peek --topic test-topic --subscription log --show-user-props --show-system-props | jq
+asb-tour peek --topic=test-topic --subscription=log --show-user-props --show-system-props | jq
 ```
 
 List messages from subscription's dead letter queue (dlq).
 
 ```bash
 export SB_CONN_STR="Endpoint=sb://<full conn string having receiver or manage role>"
-asb-tour dlq --topic test-topic --subscription log --show-user-props --show-system-props --count 10
+asb-tour dlq peek --topic=test-topic --subscription=log --count=10
 ```
 
 Move/Copy dlq messages to topics
 
 ```bash
 export SB_CONN_STR="Endpoint=sb://<full conn string having receiver or manage role>"
-asb-tour dlq --move --topic test-topic --subscription log <message-id>
-asb-tour dlq --copy --topic test-topic --subscription log <message-id>
+asb-tour dlq move --topic=test-topic --subscription=log <message-ids>
+asb-tour dlq copy --topic=test-topic --subscription=log <message-ids>
+asb-tour dlq purge --topic=test-topic --subscription=log
 ```
 
 ## Explore Topics, Subscriptions: Messages & DLQ
