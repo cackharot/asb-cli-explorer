@@ -31,11 +31,11 @@ class MessageList(npyscreen.GridColTitles):
 
     def selected(self):
         row = self.selected_row()
-        msg = self.parent.selected_message(row[0])
+        if row is not None:
+            self.parent.selected_message(row[0])
 
     def when_view(self, *args, **keywords):
-        row = self.selected_row()
-        msg = self.parent.selected_message(row[0])
+        self.selected()
 
     def when_exit(self, *args, **keywords):
         curses.beep()
@@ -210,6 +210,7 @@ and user/system properties here.
         self.is_dlq = is_dlq
         self.update_messages_request = True
         self.wMain.footer = "Peeking {} messages...".format('dlq' if is_dlq else '')
+        self.wMain.edit()
         self.wMain.display()
 
     def get_subclient(self, topic_name, sub_name, is_dlq):
