@@ -10,7 +10,7 @@ setup(
     description="Explore Azure service bus from command line",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version='0.1.5',
+    version='0.1.6',
     packages=find_packages(exclude=['tests']),
     url='https://github.com/cackharot/asb-cli-explorer',
     test_suite='tests',
