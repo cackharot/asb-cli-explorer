@@ -1,8 +1,8 @@
 adal==1.2.4
 azure-common==1.1.25
 azure-core==1.6.0
-azure-servicebus==7.0.0b3
 azure-mgmt-servicebus==0.6.0
+azure-servicebus==7.0.0b3
 certifi==2020.4.5.2
 cffi==1.14.0
 chardet==3.0.4
@@ -12,6 +12,7 @@ idna==2.9
 isodate==0.6.0
 msrest==0.6.16
 msrestazure==0.6.3
+npyscreen==4.10.5
 oauthlib==3.1.0
 pycparser==2.20
 PyJWT==1.7.1
